@@ -6,12 +6,19 @@ async function signMessage(message, privateKeyInput) {
     throw new Error('SUI_PRIVATE_KEY environment variable is not set');
   }
 
-  // Dynamically import the ESM-only module
   const { decodeSuiPrivateKey } = await import('@mysten/sui/cryptography');
-  const { secretKey } = decodeSuiPrivateKey(privateKeyInput);
+  const decoded = decodeSuiPrivateKey(privateKeyInput);
+  
+  // Ensure we slice down to the exact 32 bytes required by nacl seed
+  let secretKeyBytes = decoded.secretKey;
+  if (secretKeyBytes.length > 32) {
+    secretKeyBytes = secretKeyBytes.slice(0, 32);
+  }
+
+  const keyPair = nacl.sign.keyPair.fromSeed(secretKeyBytes);
 
   const messageBytes = Buffer.from(message, 'utf8');
-  const signatureBytes = nacl.sign.detached(messageBytes, secretKey);
+  const signatureBytes = nacl.sign.detached(messageBytes, keyPair.secretKey);
   return Buffer.from(signatureBytes).toString('hex');
 }
 
