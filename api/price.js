@@ -1,21 +1,14 @@
 const nacl = require('tweetnacl');
 const store = require('./_store');
+const { decodeSuiPrivateKey } = require('@mysten/sui/cryptography');
 
-function signMessage(message, privateKeyHex) {
-  if (!privateKeyHex) {
+function signMessage(message, privateKeyInput) {
+  if (!privateKeyInput) {
     throw new Error('SUI_PRIVATE_KEY environment variable is not set');
   }
 
-  const keyBuffer = Buffer.from(privateKeyHex.replace(/^0x/, ''), 'hex');
-  let secretKey;
-
-  if (keyBuffer.length === 32) {
-    secretKey = nacl.sign.keyPair.fromSeed(keyBuffer).secretKey;
-  } else if (keyBuffer.length === 64) {
-    secretKey = keyBuffer;
-  } else {
-    throw new Error(`Invalid private key length: ${keyBuffer.length} bytes (expected 32 or 64)`);
-  }
+  // Safely decode suiprivkey1 string into the 32-byte secret key required by tweetnacl
+  const { secretKey } = decodeSuiPrivateKey(privateKeyInput);
 
   const messageBytes = Buffer.from(message, 'utf8');
   const signatureBytes = nacl.sign.detached(messageBytes, secretKey);
@@ -44,9 +37,9 @@ module.exports = async function handler(req, res) {
       unit: 'kg',
       ts,
       supplier_address: supplierAddress,
-      sig,
+      sig
     });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };
