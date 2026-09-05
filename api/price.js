@@ -1,13 +1,13 @@
 const nacl = require('tweetnacl');
 const store = require('./_store');
-const { decodeSuiPrivateKey } = require('@mysten/sui/cryptography');
 
-function signMessage(message, privateKeyInput) {
+async function signMessage(message, privateKeyInput) {
   if (!privateKeyInput) {
     throw new Error('SUI_PRIVATE_KEY environment variable is not set');
   }
 
-  // Safely decode suiprivkey1 string into the 32-byte secret key required by tweetnacl
+  // Dynamically import the ESM-only module
+  const { decodeSuiPrivateKey } = await import('@mysten/sui/cryptography');
   const { secretKey } = decodeSuiPrivateKey(privateKeyInput);
 
   const messageBytes = Buffer.from(message, 'utf8');
@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
     const cleanSupplierAddress = supplierAddress.toLowerCase().replace(/^0x/, '');
     const messageToSign = `${item}|${priceCents}|${ts}|${cleanSupplierAddress}`;
 
-    const sig = signMessage(messageToSign, process.env.SUI_PRIVATE_KEY || '');
+    const sig = await signMessage(messageToSign, process.env.SUI_PRIVATE_KEY || '');
 
     return res.status(200).json({
       item,
