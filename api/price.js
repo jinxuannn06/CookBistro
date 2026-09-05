@@ -1,64 +1,52 @@
-const { getPrice } = require('../lib/store');
-const { getSupplierAddress, signPricingData } = require('../lib/crypto');
+const nacl = require('tweetnacl');
+const store = require('./_store');
 
-module.exports = async function handler(req, res) {
-  // CORS Headers for cross-origin frontend requests
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  // Handle preflight OPTIONS request
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+function signMessage(message, privateKeyHex) {
+  if (!privateKeyHex) {
+    throw new Error('SUI_PRIVATE_KEY environment variable is not set');
   }
 
-  // Method check
+  const keyBuffer = Buffer.from(privateKeyHex.replace(/^0x/, ''), 'hex');
+  let secretKey;
+
+  if (keyBuffer.length === 32) {
+    secretKey = nacl.sign.keyPair.fromSeed(keyBuffer).secretKey;
+  } else if (keyBuffer.length === 64) {
+    secretKey = keyBuffer;
+  } else {
+    throw new Error(`Invalid private key length: ${keyBuffer.length} bytes (expected 32 or 64)`);
+  }
+
+  const messageBytes = Buffer.from(message, 'utf8');
+  const signatureBytes = nacl.sign.detached(messageBytes, secretKey);
+  return Buffer.from(signatureBytes).toString('hex');
+}
+
+module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method Not Allowed. Use GET.' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    // 1. item: from query param (?item=xxx), default to "coffee"
-    const item = (req.query && req.query.item) ? String(req.query.item).trim() : 'coffee';
-
-    // 2. price_cents: integer (default 7500 if unset via POST /api/set-price)
-    const price_cents = getPrice();
-
-    // 3. unit: 'kg'
-    const unit = 'kg';
-
-    // 4. ts: current unix timestamp in seconds (fresh on every request)
+    const item = (req.query.item || 'coffee').toString();
+    const priceCents = store.getPriceCents();
     const ts = Math.floor(Date.now() / 1000);
+    const supplierAddress = process.env.SUI_SUPPLIER_ADDRESS || '';
 
-    // 5. supplier_address: formatted with 0x prefix and 64 lowercase hex chars
-    const { full: supplier_address, clean: cleanSupplierAddress } = getSupplierAddress();
+    const cleanSupplierAddress = supplierAddress.toLowerCase().replace(/^0x/, '');
+    const messageToSign = `${item}|${priceCents}|${ts}|${cleanSupplierAddress}`;
 
-    // 6. sig: Ed25519 signature of "<item>|<price_cents>|<ts>|<supplier_address_lowercase_no_0x_prefix>"
-    const { sig } = signPricingData({
-      item,
-      price_cents,
-      ts,
-      cleanSupplierAddress
-    });
+    const sig = signMessage(messageToSign, process.env.SUI_PRIVATE_KEY || '');
 
-    // Return exact specified JSON format
     return res.status(200).json({
       item,
-      price_cents,
-      unit,
+      price_cents: priceCents,
+      unit: 'kg',
       ts,
-      supplier_address,
-      sig
+      supplier_address: supplierAddress,
+      sig,
     });
-  } catch (error) {
-    console.error('Error handling /api/price:', error);
-    return res.status(500).json({
-      error: 'Internal server error processing pricing data',
-      message: error.message
-    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 };

@@ -1,23 +1,7 @@
 {
-  "name": "cookbistro",
+  "name": "sui-pricing-api",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "node test/test-endpoints.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jinxuannn06/CookBistro.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/jinxuannn06/CookBistro/issues"
-  },
-  "homepage": "https://github.com/jinxuannn06/CookBistro#readme",
+  "private": true,
   "dependencies": {
     "tweetnacl": "^1.0.3"
   }
